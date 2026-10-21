@@ -1,4 +1,4 @@
-import type { DataModel } from "./types";
+import { COMPANY_NAMES, type DataModel } from "./types";
 import { isFullLease, rentableUnits } from "./rentals";
 import { num } from "./money";
 
@@ -77,6 +77,21 @@ export function checkData(d: DataModel): QualityIssue[] {
   const emptyExp = d.expenses.filter((e) => e.monthlyAmounts.every((v) => num(v) === 0)).length;
   if (emptyExp) {
     out.push({ severity: "info", area: "المصاريف", message: `${emptyExp} بند مصروف بقيم صفرية لكل الأشهر.` });
+  }
+
+  for (const c of ["alpha", "beta"] as const) {
+    const salesRev = d.monthlySales
+      .filter((s) => s.companyId === c)
+      .reduce((t, s) => t + num(s.quantity) * num(s.actualPrice), 0);
+    const hasRent = units.some((u) => (u.companyId ?? "beta") === c && u.isOccupied);
+    const hasPayroll = d.positions.some((p) => p.companyId === c);
+    if (salesRev === 0 && !hasRent && hasPayroll) {
+      out.push({
+        severity: "warn",
+        area: "الإيرادات",
+        message: `${COMPANY_NAMES[c]}: لا توجد إيرادات مسجلة مقابل رواتبها. راجع توزيع المبيعات والتأجير بين الشركتين.`,
+      });
+    }
   }
 
   return out;

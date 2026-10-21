@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { DataModel, Scope, Settings } from "./types";
 import { COMPANY_NAMES } from "./types";
-import { BASE_SCENARIO, aggregate, cashFlow, forecast, hourCostFor, monthlySeries } from "./finance";
+import { BASE_SCENARIO, aggregate, cashFlow, forecastFor, hourCostFor, monthlySeries } from "./finance";
 import { laborFor } from "./labor";
 import { rentableUnits, unitMonth } from "./rentals";
 import { expenseMonth } from "./expenses";
@@ -16,7 +16,7 @@ type Cell = string | number | Formula;
 type Row = Cell[];
 
 /** أرقام صفوف قائمة الدخل (الصف 1 هو الترويسة) */
-const PL = { REV_S: 2, REV_R: 3, REV: 4, COGS: 5, GP: 6, SAL: 7, RENT: 8, EXP: 9, DEP: 10, EBIT: 11, TAX: 12, NET: 13 } as const;
+const PL = { REV_S: 2, REV_R: 3, REV: 4, COGS: 5, GP: 6, SAL: 7, RENT: 8, EXP: 9, DEP: 10, EBIT: 11, TAX: 12, NET: 13, VAT: 16 } as const;
 const AS = "'الافتراضات'";
 const PLS = "'قائمة الدخل'";
 const col = (i: number) => XLSX.utils.encode_col(i);
@@ -45,7 +45,7 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
   const wsAs = sheet(
     [
       ["الافتراض", "القيمة", "ملاحظة"],
-      ["نسبة ضريبة الدخل %", num(s.incomeTaxRate), "تُحسب على صافي ربح الفترة"],
+      ["نسبة ضريبة الدخل %", num(s.incomeTaxRate), "تُحسب لكل شركة على ربحها وحدها، وتُوزَّع على الأشهر حسب ربح كل شهر (قيم في الجداول)"],
       ["نمو الإيرادات السنوي %", num(s.revenueGrowthRate), "للتوقع"],
       ["نمو التكاليف المباشرة %", num(s.costGrowthRate), "للتوقع عند عدم وجود إيرادات"],
       ["زيادة الرواتب السنوية %", num(s.annualSalaryIncrease), "للتوقع"],
@@ -86,7 +86,7 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
       series.map((r) => r.ebit),
       t.ebit,
     ),
-    formulaRow("ضريبة الدخل", (c) => `MAX(0,${c}${PL.EBIT})*${AS}!$B$2/100`, series.map((r) => r.tax), t.tax),
+    valueRow("ضريبة الدخل", series.map((r) => r.tax), PL.TAX),
     formulaRow("صافي الربح", (c) => `${c}${PL.EBIT}-${c}${PL.TAX}`, series.map((r) => r.net), t.net),
     [],
     [
@@ -94,6 +94,7 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
       ...series.map((r, i) => F(`IFERROR(${monthCols[i]}${PL.NET}/${monthCols[i]}${PL.REV},0)`, safe(r.net, r.revenue))),
       F(`IFERROR(N${PL.NET}/N${PL.REV},0)`, safe(t.net, t.revenue)),
     ],
+    valueRow("ضريبة القيمة المضافة المحصّلة (مذكرة، لا تدخل الإيراد)", series.map((r) => r.vat), PL.VAT),
   ];
   const wsPL = sheet(plRows, [32, ...Array(13).fill(14)]);
 
@@ -105,8 +106,8 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
     const r = i + 2;
     cashRows.push([
       months[i],
-      F(`${PLS}!${cc}${PL.REV}`, c.inflow),
-      F(`${PLS}!${cc}${PL.COGS}+${PLS}!${cc}${PL.SAL}+${PLS}!${cc}${PL.RENT}+${PLS}!${cc}${PL.EXP}+${PLS}!${cc}${PL.TAX}`, c.outflow),
+      F(`${PLS}!${cc}${PL.REV}+${PLS}!${cc}${PL.VAT}`, c.inflow),
+      F(`${PLS}!${cc}${PL.COGS}+${PLS}!${cc}${PL.SAL}+${PLS}!${cc}${PL.RENT}+${PLS}!${cc}${PL.EXP}+${PLS}!${cc}${PL.TAX}+${PLS}!${cc}${PL.VAT}`, c.outflow),
       F(`B${r}-C${r}`, c.net),
       i === 0 ? F(`${AS}!$B$8+D${r}`, c.balance) : F(`E${r - 1}+D${r}`, c.balance),
     ]);
@@ -114,7 +115,7 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
   const wsCash = sheet(cashRows, [14, 18, 18, 18, 20]);
 
   // ---- التوقع 5 سنوات ----
-  const fc = forecast(t, s, 5, year);
+  const fc = forecastFor(d, scope, year, BASE_SCENARIO);
   const B = {
     rev: `${PLS}!$N$${PL.REV}`,
     cogs: `${PLS}!$N$${PL.COGS}`,
@@ -128,7 +129,7 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
     const k = idx + 1;
     const r = k + 1;
     const grow = (row: number) => `(1+${AS}!$B$${row}/100)^${k}`;
-    const tax = Math.max(0, f.ebit) * (num(s.incomeTaxRate) / 100);
+    const tax = f.tax;
     fcRows.push([
       f.year,
       F(`${B.rev}*${grow(3)}`, f.revenue),
@@ -138,8 +139,8 @@ export function buildWorkbook(d: DataModel, scope: Scope): XLSX.WorkBook {
       F(`${B.exp}*${grow(7)}`, f.expenses),
       F(`${B.dep}`, f.depreciation),
       F(`B${r}-C${r}-D${r}-E${r}-F${r}-G${r}`, f.ebit),
-      F(`MAX(0,H${r})*${AS}!$B$2/100`, tax),
-      F(`H${r}-I${r}`, f.ebit - tax),
+      tax,
+      F(`H${r}-I${r}`, f.net),
     ]);
   });
   const wsFc = sheet(fcRows, [10, 16, 18, 16, 16, 16, 14, 18, 14, 16]);

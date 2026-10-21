@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from "recharts";
 import { useData } from "@/lib/useData";
 import { useUi } from "@/lib/ui";
-import { aggregate, breakEven, cashFlow, forecast, monthlySeries, scenarioOf } from "@/lib/finance";
+import { aggregate, breakEven, cashFlow, forecastFor, monthlySeries, scenarioOf } from "@/lib/finance";
 import { fmt, MONTHS_AR, compact, pct, num } from "@/lib/money";
 import { Card, INPUT, Kpi, NumInput, PageHeader, ScenarioSelect, TD, TH, Badge } from "@/components/ui";
 
@@ -16,7 +16,7 @@ export default function CashForecast() {
   const rows = useMemo(() => monthlySeries(d, scope, year, sc), [d, scope, year, sc]);
   const totals = useMemo(() => aggregate(rows, d.settings), [rows, d.settings]);
   const cash = useMemo(() => cashFlow(rows, opening), [rows, opening]);
-  const fc = useMemo(() => forecast(totals, d.settings, 5, year), [totals, d.settings, year]);
+  const fc = useMemo(() => forecastFor(d, scope, year, sc), [d, scope, year, sc]);
   const be = breakEven(totals);
   const avgRevenue = totals.revenue / 12;
   const safety = avgRevenue > 0 ? (avgRevenue - be) / avgRevenue : 0;
@@ -66,8 +66,8 @@ export default function CashForecast() {
             <thead>
               <tr>
                 <th className={TH}>الشهر</th>
-                <th className={TH}>المقبوضات (الإيرادات)</th>
-                <th className={TH}>المدفوعات</th>
+                <th className={TH}>المقبوضات (شامل الضريبة)</th>
+                <th className={TH}>المدفوعات (شامل توريد الضريبة)</th>
                 <th className={TH}>صافي الشهر</th>
                 <th className={TH}>الرصيد التراكمي</th>
               </tr>
@@ -86,7 +86,7 @@ export default function CashForecast() {
           </table>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          المدفوعات تشمل تكلفة الخدمات المباشرة والرواتب وإيجار المالك والمصروفات والضريبة. الإهلاك غير نقدي فلا يدخل فيها.
+          المقبوضات تشمل ضريبة القيمة المضافة المحصّلة على الخدمات، والمدفوعات تشمل توريدها للهيئة، فلا تؤثر الضريبة في صافي النقد. المدفوعات تشمل أيضاً التكلفة المباشرة والرواتب والإيجار والمصروفات وضريبة الدخل. الإهلاك غير نقدي فلا يدخل فيها.
         </p>
       </Card>
 

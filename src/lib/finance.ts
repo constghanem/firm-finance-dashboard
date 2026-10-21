@@ -13,6 +13,7 @@ export interface MonthRow {
   month: number;
   revServices: number;
   revRentals: number;
+  vat: number; // ضريبة القيمة المضافة المحصّلة على الخدمات (مذكرة، لا تدخل الإيراد)
   revenue: number;
   cogs: number; // تكلفة الخدمات المباشرة (مصروفات الجهات + رسوم + عمولات)
   grossProfit: number;
@@ -29,7 +30,7 @@ export interface MonthRow {
 }
 
 export const emptyRow = (month: number): MonthRow => ({
-  month, revServices: 0, revRentals: 0, revenue: 0, cogs: 0, grossProfit: 0, salaries: 0,
+  month, revServices: 0, revRentals: 0, vat: 0, revenue: 0, cogs: 0, grossProfit: 0, salaries: 0,
   rentCost: 0, expenses: 0, depreciation: 0, ebit: 0, tax: 0, net: 0, salesQty: 0,
   occupiedUnits: 0, totalUnits: 0,
 });
@@ -38,13 +39,19 @@ function finishRow(r: MonthRow, s: Settings): MonthRow {
   r.revenue = r.revServices + r.revRentals;
   r.grossProfit = r.revenue - r.cogs;
   r.ebit = r.grossProfit - r.salaries - r.rentCost - r.expenses - r.depreciation;
-  r.tax = Math.max(0, r.ebit) * (num(s.incomeTaxRate) / 100);
-  r.net = r.ebit - r.tax;
+  r.tax = 0;
+  r.net = r.ebit;
   return r;
 }
 
 /** السلسلة الشهرية (12 شهراً) لسنة معيّنة وشركة أو للمجموع، مع سيناريو اختياري */
 export function monthlySeries(d: DataModel, scope: Scope, year: number, scenario: Scenario = NEUTRAL): MonthRow[] {
+  // المجموع = مجموع الشركتين: كل شركة كيان قانوني مستقل تُحسب ضريبتها على ربحها وحده
+  if (scope === "all") {
+    const a = monthlySeries(d, "alpha", year, scenario);
+    const b = monthlySeries(d, "beta", year, scenario);
+    return a.map((r, i) => sumRows(r, b[i]));
+  }
   const s = d.settings;
   const vol = num(scenario.volumeFactor) || 1;
   const price = num(scenario.priceFactor) || 1;
@@ -63,7 +70,7 @@ export function monthlySeries(d: DataModel, scope: Scope, year: number, scenario
 
     for (const sale of d.monthlySales) {
       if (sale.year !== year || sale.month !== m) continue;
-      const share = scope === "all" ? 1 : sale.companyId === scope ? 1 : 0;
+      const share = sale.companyId === scope ? 1 : 0;
       if (!share) continue;
       const svc = d.serviceCatalog.find((x) => x.id === sale.serviceId);
       const qty = num(sale.quantity) * vol;
@@ -73,6 +80,7 @@ export function monthlySeries(d: DataModel, scope: Scope, year: number, scenario
           (svc.otherCosts ?? []).reduce((t, x) => t + num(x.amount), 0)
         : 0;
       r.revServices += qty * unitPrice;
+      if (svc?.hasVAT) r.vat += qty * unitPrice * (num(s.vatRate) / 100);
       r.cogs += qty * direct * cost;
       r.salesQty += qty;
     }
@@ -102,7 +110,29 @@ export function monthlySeries(d: DataModel, scope: Scope, year: number, scenario
     r.depreciation = depMonthly;
     rows.push(finishRow(r, s));
   }
+  allocateTax(rows, s);
   return rows;
+}
+
+/** ضريبة الدخل تُحسب على ربح الشركة السنوي (لا تُخفَّض بخسائر شركة أخرى)، ثم تُوزَّع على الأشهر حسب ربح كل شهر */
+function allocateTax(rows: MonthRow[], s: Settings): void {
+  const rate = num(s.incomeTaxRate) / 100;
+  const annualTax = Math.max(0, rows.reduce((t, r) => t + r.ebit, 0)) * rate;
+  const positive = rows.reduce((t, r) => t + Math.max(0, r.ebit), 0);
+  for (const r of rows) {
+    r.tax = positive > 0 ? (annualTax * Math.max(0, r.ebit)) / positive : 0;
+    r.net = r.ebit - r.tax;
+  }
+}
+
+/** جمع شهرين (لشركتين) حقلاً حقلاً */
+function sumRows(a: MonthRow, b: MonthRow): MonthRow {
+  const out: MonthRow = { ...a };
+  const o = out as unknown as Record<string, number>;
+  const A = a as unknown as Record<string, number>;
+  const B = b as unknown as Record<string, number>;
+  for (const k of Object.keys(A)) if (k !== "month") o[k] = A[k] + B[k];
+  return out;
 }
 
 export interface Totals extends Omit<MonthRow, "month" | "salesQty" | "occupiedUnits" | "totalUnits"> {
@@ -116,6 +146,8 @@ export function aggregate(rows: MonthRow[], s: Settings): Totals {
     (acc, r) => {
       acc.revServices += r.revServices;
       acc.revRentals += r.revRentals;
+      acc.vat += r.vat;
+      acc.tax += r.tax;
       acc.cogs += r.cogs;
       acc.salaries += r.salaries;
       acc.rentCost += r.rentCost;
@@ -123,14 +155,13 @@ export function aggregate(rows: MonthRow[], s: Settings): Totals {
       acc.depreciation += r.depreciation;
       return acc;
     },
-    { revServices: 0, revRentals: 0, revenue: 0, cogs: 0, grossProfit: 0, salaries: 0, rentCost: 0, expenses: 0,
+    { revServices: 0, revRentals: 0, vat: 0, revenue: 0, cogs: 0, grossProfit: 0, salaries: 0, rentCost: 0, expenses: 0,
       depreciation: 0, ebit: 0, tax: 0, net: 0, occupancy: 0, margin: 0, netMargin: 0 },
   );
   t.revenue = t.revServices + t.revRentals;
   t.grossProfit = t.revenue - t.cogs;
   t.ebit = t.grossProfit - t.salaries - t.rentCost - t.expenses - t.depreciation;
-  // الضريبة تُحسب على صافي الفترة (لا تُحسب على الأشهر الخاسرة بشكل منفصل)
-  t.tax = Math.max(0, t.ebit) * (num(s.incomeTaxRate) / 100);
+  // الضريبة = مجموع ضرائب الأشهر (وكل شهر موزَّع من ضريبة الشركة السنوية)
   t.net = t.ebit - t.tax;
   const occSum = rows.reduce((a, r) => a + r.occupiedUnits, 0);
   const totSum = rows.reduce((a, r) => a + r.totalUnits, 0);
@@ -159,8 +190,8 @@ export interface CashRow {
 export function cashFlow(rows: MonthRow[], opening: number): CashRow[] {
   let bal = num(opening);
   return rows.map((r) => {
-    const inflow = r.revenue;
-    const outflow = r.cogs + r.salaries + r.rentCost + r.expenses + r.tax;
+    const inflow = r.revenue + r.vat; // المقبوضات شاملة الضريبة المحصّلة
+    const outflow = r.cogs + r.salaries + r.rentCost + r.expenses + r.tax + r.vat; // وتوريد الضريبة للهيئة
     const net = inflow - outflow;
     bal += net;
     return { month: r.month, inflow, outflow, net, balance: bal };
@@ -176,6 +207,7 @@ export interface ForecastRow {
   expenses: number;
   depreciation: number;
   ebit: number;
+  tax: number;
   net: number;
 }
 
@@ -192,9 +224,32 @@ export function forecast(base: Totals, s: Settings, years = 5, baseYear = 2026):
     const depreciation = base.depreciation;
     const ebit = revenue - cogs - salaries - rent - expenses - depreciation;
     const tax = Math.max(0, ebit) * (num(s.incomeTaxRate) / 100);
-    out.push({ year: baseYear + k, revenue, cogs, salaries, rent, expenses, depreciation, ebit, net: ebit - tax });
+    out.push({ year: baseYear + k, revenue, cogs, salaries, rent, expenses, depreciation, ebit, tax, net: ebit - tax });
   }
   return out;
+}
+
+/** توقع السنوات الخمس للمجموعة أو لشركة: المجموع = مجموع الشركتين، وكل واحدة تُحسب ضريبتها على حدة */
+export function forecastFor(d: DataModel, scope: Scope, year: number, scenario: Scenario = NEUTRAL, years = 5): ForecastRow[] {
+  const one = (c: Scope) => forecast(aggregate(monthlySeries(d, c, year, scenario), d.settings), d.settings, years, year);
+  if (scope !== "all") return one(scope);
+  const a = forecast(aggregate(monthlySeries(d, "alpha", year, scenario), d.settings), d.settings, years, year);
+  const b = forecast(aggregate(monthlySeries(d, "beta", year, scenario), d.settings), d.settings, years, year);
+  return a.map((r, i) => {
+    const o = b[i];
+    return {
+      year: r.year,
+      revenue: r.revenue + o.revenue,
+      cogs: r.cogs + o.cogs,
+      salaries: r.salaries + o.salaries,
+      rent: r.rent + o.rent,
+      expenses: r.expenses + o.expenses,
+      depreciation: r.depreciation + o.depreciation,
+      ebit: r.ebit + o.ebit,
+      tax: r.tax + o.tax,
+      net: r.net + o.net,
+    };
+  });
 }
 
 export function scenarioOf(d: DataModel, id: string | undefined): Scenario {

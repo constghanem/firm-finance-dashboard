@@ -60,10 +60,11 @@ export default function Sales() {
         subtitle="الإيرادات الشهرية للخدمات. الإجمالي التقديري يُستخدم عندما لا تتوفر تفاصيل الخدمات، والتفصيل حسب الخدمة يُضاف فوقه."
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi label="إجمالي المبيعات السنوية (تقدير)" value={`${fmt(totalYear)} ر.س`} />
         <Kpi label="متوسط الشهر" value={`${fmt(avg)} ر.س`} hint={`النطاق المتوقع ${fmt(RANGE_MIN)} إلى ${fmt(RANGE_MAX)}`} />
         <Kpi label="أشهر خارج النطاق" value={String(outOfRange)} tone={outOfRange ? "warn" : "good"} />
+        <Kpi label={`ضريبة القيمة المضافة ${d.settings.vatRate}%`} value={`${fmt((totalYear * d.settings.vatRate) / 100)} ر.س`} hint="تُضاف فوق المبيعات وتُورَّد للهيئة، ولا تدخل الإيراد" />
         <Kpi label="مبيعات التفصيل حسب الخدمة" value={`${fmt(detailTotal)} ر.س`} hint="يُحسب فقط عند إدخال كميات" />
       </div>
 
@@ -111,7 +112,7 @@ export default function Sales() {
           </table>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          القيمة الأساسية منتصف النطاق (225 ألف شهرياً). الخانات الصفراء خارج النطاق 150 إلى 300 ألف. المبالغ قبل ضريبة القيمة المضافة. اختر الشركة التي تسجَّل عليها هذه المبيعات.
+          القيمة الأساسية منتصف النطاق (225 ألف شهرياً). الخانات الصفراء خارج النطاق 150 إلى 300 ألف. المبالغ قبل الضريبة، وتُضاف عليها ضريبة القيمة المضافة 15% عند الفوترة. اختر الشركة التي تسجَّل عليها هذه المبيعات.
         </p>
       </Card>
 

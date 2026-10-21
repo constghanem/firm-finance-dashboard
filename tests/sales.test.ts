@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialData } from "../src/lib/initialData";
-import { aggregate, monthlySeries, scenarioOf, BASE_SCENARIO } from "../src/lib/finance";
+import { aggregate, cashFlow, monthlySeries, scenarioOf, BASE_SCENARIO } from "../src/lib/finance";
 import { TOTAL_SALES_ID } from "../src/lib/sales";
 import { ESTIMATED_MONTHLY_SALES } from "../src/lib/defaults";
 
@@ -30,6 +30,19 @@ describe("المبيعات الشهرية التقديرية (150 إلى 300 أ�
     const low = aggregate(monthlySeries(d, "all", 2026, scenarioOf(d, "sc-sales-min")), d.settings);
     const high = aggregate(monthlySeries(d, "all", 2026, scenarioOf(d, "sc-sales-max")), d.settings);
     expect(high.ebit).toBeGreaterThan(low.ebit);
+  });
+
+  it("ضريبة 15% تُحسب فوق المبيعات ولا تدخل الإيراد", () => {
+    const t = aggregate(monthlySeries(d, "all", 2026, BASE_SCENARIO), d.settings);
+    expect(Math.round(t.vat)).toBe(Math.round((ESTIMATED_MONTHLY_SALES * 12 * d.settings.vatRate) / 100));
+    expect(Math.round(t.revServices)).toBe(ESTIMATED_MONTHLY_SALES * 12);
+  });
+
+  it("الضريبة لا تغيّر صافي النقد: الرصيد النهائي = صافي الربح + الإهلاك", () => {
+    const rows = monthlySeries(d, "all", 2026, BASE_SCENARIO);
+    const t = aggregate(rows, d.settings);
+    const cash = cashFlow(rows, 0);
+    expect(Math.round(cash[11].balance)).toBe(Math.round(t.net + t.depreciation));
   });
 
   it("مجموع الشركتين يساوي المجموع الكلي للإيرادات", () => {

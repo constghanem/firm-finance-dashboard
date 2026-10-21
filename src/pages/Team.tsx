@@ -85,7 +85,7 @@ export default function Team() {
           </table>
         </div>
         <p className="mt-3 text-xs leading-5 text-slate-500">
-          التأمين: {pct(num(d.settings.saudiInsuranceRate) / 100)} للسعودي و{pct(num(d.settings.foreignInsuranceRate) / 100)} لغير السعودي على الأساسي والسكن عندما تتحمله الشركة. الإضافي يُحسب بمعامل {d.settings.overtimeMultiplier}.
+          التأمين: {d.settings.saudiInsuranceRate}% للسعودي و{d.settings.foreignInsuranceRate}% لغير السعودي على الأساسي والسكن عندما تتحمله الشركة. الإضافي يُحسب بمعامل {d.settings.overtimeMultiplier}.
         </p>
       </Card>
     </>

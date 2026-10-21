@@ -196,7 +196,7 @@ export default function DataCenter() {
             </thead>
             <tbody>
               {[
-                ["الموظفون", d.positions.length, `${d.positions.filter((p) => shareFor(p, "alpha") + shareFor(p, "beta") > 0).length} سجل بتوزيع الشركات`],
+                ["الموظفون", d.positions.length, "التكلفة الكاملة تشمل التأمين والرسوم والإضافي"],
                 ["الخدمات", d.serviceCatalog.length, "يتضمن إجمالي المبيعات التقديري"],
                 ["سجلات المبيعات", d.monthlySales.length, "الكمية × السعر لكل شهر"],
                 ["وحدات التأجير", d.rentalUnits.length, "الوحدات الفرعية مستبعدة من الحساب"],

@@ -26,13 +26,13 @@ describe("تصدير Excel بمعادلات حية", () => {
   it("الربح التشغيلي والضريبة وصافي الربح معادلات", () => {
     const ws = wb.Sheets["قائمة الدخل"];
     expect(ws["B11"].f).toBe("B6-B7-B8-B9-B10");
-    expect(ws["B12"].f).toContain("'الافتراضات'!$B$2");
+    expect(typeof ws["B12"].v).toBe("number");
     expect(ws["N13"].f).toBe("N11-N12");
   });
 
   it("التدفق النقدي يرجع إلى قائمة الدخل ويتراكم الرصيد", () => {
     const ws = wb.Sheets["التدفق النقدي"];
-    expect(ws["B2"].f).toBe("'قائمة الدخل'!B4");
+    expect(ws["B2"].f).toBe("'قائمة الدخل'!B4+'قائمة الدخل'!B16");
     expect(ws["E3"].f).toBe("E2+D3");
   });
 

@@ -8,6 +8,14 @@ html {
   font-family: var(--font-sans);
 }
 
+tbody tr {
+  transition: background-color 120ms ease;
+}
+
+tbody tr:hover td {
+  background-color: #f8fafc;
+}
+
 @media print {
   @page {
     size: A4 landscape;

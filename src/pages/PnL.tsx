@@ -123,6 +123,13 @@ export default function PnL() {
                   <td key={r.month} className={`${TD} text-end`} dir="ltr">{marginText(r.ebit, r.revenue)}</td>
                 ))}
               </tr>
+              <tr className="text-slate-500">
+                <td className={TD}>ضريبة القيمة المضافة المحصّلة (مذكرة، لا تدخل الإيراد)</td>
+                <td className={`${TD} bg-sky-50 text-end tabular-nums`} dir="ltr">{fmt(total.vat)}</td>
+                {rows.map((r) => (
+                  <td key={r.month} className={`${TD} text-end tabular-nums`} dir="ltr">{fmt(r.vat)}</td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
