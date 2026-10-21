@@ -1,0 +1,16 @@
+# dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# local secrets and configs — never commit
+.env
+.env.*
+!.env.example
+.project-config.json
+
+# editor and OS noise
+.DS_Store
+*.log
+.vscode/
+.idea/

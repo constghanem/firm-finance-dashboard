@@ -1,0 +1,14 @@
+{
+  "name": "firm-finance-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "description": "لوحة مالية تحليلية لمجموعة مكاتب (محاماة وخدمات أعمال) — عربية RTL",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

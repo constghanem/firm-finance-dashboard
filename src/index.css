@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans Arabic", "Segoe UI", system-ui, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  table {
+    font-size: 9pt;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}
